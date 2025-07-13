@@ -18,18 +18,22 @@ class config_manager:
             return
         self.config_path = Path("configs/config.ini")
         self.config = configparser.ConfigParser()
+        self.properties_config = configparser.ConfigParser()
         self.load_config()
         self._initialized = True
 
     def default_config(self) -> Dict[str, Dict[str, str]]:
         return {
             "langchain": {
-                "api-key": "输入LangSmith API Key",
+                "api-key": "Input LangSmith API Key here",
             },
             "zhipu": {
-                "api-key": "输入智谱API Key",
+                "api-key": "Input Zhipu API Key here",
                 "model": "glm-4-plus"
             },
+            "project": {
+                "project-dir": "Input your project path here",
+            }
         }
 
     def config_exists(self) -> bool:
@@ -48,18 +52,21 @@ class config_manager:
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 self.config.write(f)
         except IOError as e:
-            print(f"⚠️ 保存配置文件时出错: {e}")
+            print(f"⚠️ Error saving config file: {e}")
 
-    def load_config(self) -> configparser.ConfigParser:
+    def load_config(self) -> None:
         if not self.config_exists():
             self.create_default_config()
-            print("已生成配置文件，请在config/config.ini中进行配置")
+            print(
+                "Config file generated. Please configure it in config/config.ini.")
             exit()
         try:
             self.config.read(self.config_path)
         except configparser.Error as e:
-            print(f"⚠️ 加载配置文件时出错: {e}")
+            print(f"⚠️ Error loading config file: {e}")
             self.create_default_config()
+
+        print("Config file loaded successfully")
 
         # Set the environment
         api_key = self.get("zhipu", "api-key")
@@ -71,10 +78,31 @@ class config_manager:
         os.environ["LANGSMITH_API_KEY"] = langsmith_api_key
         os.environ["LANGSMITH_PROJECT"] = "modmaster"
 
-        return self.config
+        project_dir = self.get("project", "project-dir")
+        project_path = Path(project_dir)
+        if not project_path.is_dir():
+            print("Project path not found!")
+            exit()
+
+        try:
+            with open(project_path / "gradle.properties") as stream:
+                content = "[dummy_section]\n" + stream.read()
+            self.properties_config.read_string(content)
+        except configparser.Error as e:
+            print(f"⚠️ Error loading gradle.properties file: {e}")
+            exit()
+
+        print("Project loaded successfully")
+        print(f"Mod name: {self.get_project_property("mod_name")}")
+        print(f"Mod version: {self.get_project_property("mod_version")}")
+        print(
+            f"Hello, mod developers! {self.get_project_property("mod_authors")}!")
 
     def get(self, section: str, option: str) -> str:
         return self.config.get(section, option)
+
+    def get_project_property(self, option: str) -> str:
+        return self.properties_config.get("dummy_section", option)
 
 
 config = config_manager()
